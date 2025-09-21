@@ -1,107 +1,50 @@
-# 🚀 Day-1: Introduction to Containers (Docker Basics)
+# Docker Day-1: Introduction to Containers
 
-## 1. Virtualization vs Containerization
+![Watermark](tech_with_diwana.png)
 
-### 🔹 Virtualization
-- Virtual Machines (VMs) ek **hypervisor** ke upar chalte hain.
-- Har VM ka apna **Operating System + Binaries + Libraries + App Code** hota hai.
-- Heavy hote hain aur boot time zyada lagta hai.
+## 1. Introduction to Containers
 
-### 🔹 Containerization
-- Containers host ka **OS kernel share karte hain**.
-- Sirf **app + dependencies** package hote hain.
-- Lightweight, fast aur resource-efficient hote hain.
+### 🔹 Virtualization vs Containerization
+- **Virtualization (VMs):**
+  - Hypervisor ke upar har ek Virtual Machine ka apna **Guest OS** hota hai.
+  - Heavy hote hain, zyada RAM/CPU lete hain, aur boot time slow hota hai.
+- **Containerization:**
+  - Host OS ke **kernel ko share** karte hain, sirf app + dependencies ek isolated environment me run hoti hain.
+  - Lightweight hote hain, fast startup aur kam resources use karte hain.
 
-| Feature | Virtual Machines | Containers |
-|---------|------------------|------------|
-| Abstraction | Hardware level | OS level |
-| OS per instance | Yes (Guest OS) | No (shared kernel) |
-| Resource usage | High | Low |
-| Startup time | Minutes | Seconds |
-| Portability | Limited | Highly portable |
+📸 Diagram:  
+![VM vs Container](vm_vs_container.png)
 
 ---
 
-## 2. Docker — Kya hai & Kyun Use Karte Hain
+### 🔹 Docker kya hai aur kyu use karte hain?
+- Docker ek **containerization platform** hai jo apps ko build, ship aur run karne me help karta hai.
+- Ek baar app ko Docker image me package karo → kahin bhi same tarike se run karo.
+- Developers ke liye dependency conflicts ka problem solve karta hai.
+- CI/CD aur microservices me sabse zyada use hota hai.
 
-👉 **Definition (Official Docker Docs):**  
-“Docker is an open platform for developing, shipping, and running applications.”
-
-### 🔹 Why Docker?
-- **Consistency**: “Works on my machine” problem khatam.
-- **Portability**: Laptop → Server → Cloud → Same image, same result.
-- **Efficiency**: Ek server pe multiple apps bina heavy resources consume kiye.
-- **Faster Deployment**: Containers boot in seconds.
+📸 Diagram:  
+![Docker Whale](docker_whale.png)
 
 ---
 
-## 3. Architecture Comparison
+### 🔹 Container Architecture vs VM Architecture
+- **VM Architecture:** Hardware → Hypervisor → Guest OS → App
+- **Container Architecture:** Hardware → OS Kernel → Docker Engine → Containers
 
-### 🔹 VM Architecture
-```
-[Hardware]
-   ↳ Host OS
-        ↳ Hypervisor
-             ↳ VM1 → Guest OS → App1
-             ↳ VM2 → Guest OS → App2
-```
-
-### 🔹 Container Architecture
-```
-[Hardware]
-   ↳ Host OS
-        ↳ Docker Engine
-             ↳ Container1 → App1 + Dependencies
-             ↳ Container2 → App2 + Dependencies
-```
-
-✅ **Key Difference:**  
-Containers **don’t need a full OS**, they share the host OS kernel.
+📸 Diagram:  
+![VM vs Container](vm_vs_container.png)
 
 ---
 
-## 4. Docker Engine & Daemon
+### 🔹 Docker Engine & Daemon
+- **Docker Client (CLI):** Commands dene ke liye use hota hai.
+- **Docker Daemon (`dockerd`):** Background service jo containers banata aur manage karta hai.
+- **Docker Hub:** Public registry jahan se images pull ki jaati hain.
 
-**Docker Engine Components:**
-
-1. **Docker Daemon (`dockerd`)**
-   - Background service that builds, runs, and manages containers.
-
-2. **Docker CLI (`docker`)**
-   - User commands like `docker run nginx`, `docker ps`.
-   - CLI → REST API → Daemon.
-
-3. **Docker REST API**
-   - Communication bridge between CLI and Daemon.
-
-4. **Docker Registry**
-   - Stores & distributes images (e.g., Docker Hub, private registry).
+📸 Diagram (Architecture):  
+![Docker Architecture](docker_architecture.png)
 
 ---
 
-## 5. Example Snippets
-
-### 🔹 Run First Container
-```bash
-# Pull & run nginx container
-docker run -d -p 8080:80 nginx
-```
-
-### 🔹 Check Running Containers
-```bash
-docker ps
-```
-
-### 🔹 Stop Container
-```bash
-docker stop <container_id>
-```
-
----
-
-## 📚 References
-
-- [Docker Overview (Official Docs)](https://docs.docker.com/get-started/docker-overview/)
-- [What is a Container? (Docker.com)](https://www.docker.com/resources/what-container/)
-- [Containers vs VMs (Microsoft Docs)](https://learn.microsoft.com/en-us/virtualization/windowscontainers/about/containers-vs-vm)
-- [Docker Architecture (Cherry Servers)](https://www.cherryservers.com/blog/a-complete-overview-of-docker-architecture)
+✍️ Prepared By: **Tech With Diwana**
