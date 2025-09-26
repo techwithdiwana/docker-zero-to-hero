@@ -11,7 +11,7 @@
 
 ---
 
-![Day-4 Banner](./A_digital_graphic_design_banner_showcases_"DAY-4:_.png)
+![Day-4 Banner](./day4-banner.png)
 
 ---
 
