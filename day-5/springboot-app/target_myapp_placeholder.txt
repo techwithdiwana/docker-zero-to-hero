@@ -1,0 +1,1 @@
+Place your built JAR as target/myapp.jar when building the image.
