@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  app:
+    image: alpine
+    command: sh -c "ls /data; sleep 1000"
+    volumes:
+      - my_nfs_vol:/data
+
+volumes:
+  my_nfs_vol:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=192.168.1.100,rw
+      device: ":/exported/path"
