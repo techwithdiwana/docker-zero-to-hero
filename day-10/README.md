@@ -1,190 +1,257 @@
-# 🛡️ Day-10: Docker Security
-**Docker Zero to Hero Series — by [Tech With Diwana](https://github.com/techwithdiwana)**
-
----
+# 🛡️ Day-10 — Docker Security
+**Docker Zero to Hero — Day 10**  
+Beginner-friendly guide. Each topic contains: **WHAT**, **WHY**, **HOW**, **WHEN**, plus examples and quick tests.
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Level-Intermediate-blue?style=for-the-badge"/>
-  <img src="https://img.shields.io/badge/Topic-Docker%20Security-orange?style=for-the-badge"/>
-  <img src="https://img.shields.io/badge/Tools-Trivy%2C%20Anchore%2C%20Seccomp-green?style=for-the-badge"/>
-  <img src="https://img.shields.io/badge/Series-Day--10-red?style=for-the-badge"/>
-  <img src="https://img.shields.io/badge/Author-Tech%20With%20Diwana-yellow?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Level-Intermediate-blue?style=for-the-badge"/> <img src="https://img.shields.io/badge/Topic-Docker%20Security-orange?style=for-the-badge"/> <img src="https://img.shields.io/badge/Tools-Trivy%2C%20Anchore%2C%20Seccomp-green?style=for-the-badge"/> <img src="https://img.shields.io/badge/Series-Day--10-red?style=for-the-badge"/> <img src="https://img.shields.io/badge/Author-Tech%20With%20Diwana-yellow?style=for-the-badge"/>
 </p>
 
 ---
 
-## 🎯 Overview
-Security is one of the most critical aspects of containerized environments.  
-In this session, we’ll explore **how to secure Docker containers** — from non-root users to image scanning and secret management.
+## How to use this document
+For each topic you will find:
+- **WHAT** — short definition  
+- **WHY** — why it matters / security impact  
+- **HOW** — commands or steps to implement  
+- **WHEN** — when to use or common scenarios  
+- **EXAMPLE** — ready-to-run snippet  
+- **QUICK TEST** — one-liners to verify behavior
 
 ---
 
-## 🧱 Topics Covered
+## 1) Non-root users in containers
 
-### 🔹 1. Run Containers as Non-Root Users
-By default, containers run as the **root user**, which can be risky.  
-To reduce risk, always create a **non-root user** inside the Docker image.
+**WHAT**  
+Run the container main process as a non-root Linux user instead of `root`.
 
-#### 🧩 Example:
-```Dockerfile
+**WHY**  
+Running as root increases risk: if the container is compromised, attackers can get more leverage. A non-root process reduces attack surface.
+
+**HOW**
+- Create a user in the Dockerfile (`useradd` or `adduser`).
+- Use `USER <username>` or `USER <UID:GUID>` in the Dockerfile.
+- Combine with `CAP_NET_BIND_SERVICE` if the non-root process needs to bind ports <1024.
+
+**WHEN**
+- Always for application containers in production.
+- Allow root during image build stages (install packages), but switch to non-root for runtime.
+
+**EXAMPLE (Dockerfile)**
+```dockerfile
 FROM ubuntu:22.04
-
-# Create a new user
-RUN useradd -m appuser
-
-# Switch to non-root user
-USER appuser
-
+RUN useradd -m -s /bin/bash appuser
 WORKDIR /home/appuser
+USER appuser
 CMD ["bash"]
 ```
 
-✅ Now your container runs with **limited privileges**, reducing attack surface.
-
----
-
-### 🔹 2. Capabilities & Seccomp
-Linux **capabilities** split root privileges into smaller chunks — e.g., `NET_ADMIN`, `SYS_ADMIN`.
-
-Docker allows you to drop or add specific capabilities using `--cap-drop` or `--cap-add`.
-
-#### 🧩 Example:
+**QUICK TEST**
 ```bash
-# Drop all capabilities except those needed
-docker run --cap-drop=ALL --cap-add=NET_BIND_SERVICE nginx
-```
-
-#### 🛡️ Seccomp (Secure Computing Mode)
-`seccomp` filters system calls that containers can make.
-
-- Default Docker seccomp profile blocks dangerous syscalls.
-- You can apply your own custom seccomp profile:
-
-```bash
-docker run --security-opt seccomp=custom-seccomp.json nginx
+docker build -t nonroot-demo .
+docker run --rm nonroot-demo whoami   # expected: appuser
 ```
 
 ---
 
-### 🔹 3. Docker Content Trust (DCT)
-DCT ensures that you **only use signed images**.  
-It verifies image signatures before pulling or running images.
+## 2) Capabilities & Seccomp
 
-#### ✅ Enable Docker Content Trust:
+**WHAT**
+- **Capabilities**: granular kernel privileges (e.g., `NET_BIND_SERVICE`, `NET_ADMIN`).
+- **Seccomp**: syscall filter to allow or block specific kernel calls.
+
+**WHY**
+- Capabilities let you give only needed privileges to container processes.
+- Seccomp can block dangerous syscalls even if capabilities exist, reducing attack surface.
+
+**HOW**
+- Use `--cap-drop=ALL` and `--cap-add=<CAP>` when running containers.
+- Apply custom seccomp profile with `--security-opt seccomp=./profile.json`.
+
+**WHEN**
+- Default: drop all capabilities and add only required ones.
+- Use seccomp for services exposed to untrusted input or running third-party code.
+
+**EXAMPLE (capabilities)**
+```bash
+docker run --rm -d --cap-drop=ALL --cap-add=NET_BIND_SERVICE -p 80:80 nginx:latest
+```
+
+**EXAMPLE (seccomp JSON)**
+```json
+{
+  "defaultAction": "SCMP_ACT_ALLOW",
+  "architectures": ["SCMP_ARCH_X86_64"],
+  "syscalls": [
+    {
+      "names": ["ptrace", "perf_event_open"],
+      "action": "SCMP_ACT_ERRNO"
+    }
+  ]
+}
+```
+Run with seccomp:
+```bash
+docker run --rm --security-opt seccomp=./custom-seccomp.json alpine:3.18 sh -c "echo seccomp ok"
+```
+
+**QUICK TESTS**
+- Without `NET_BIND_SERVICE`, non-root bind to port 80 should fail:
+```bash
+docker run --rm --user 1000 python:3.11 python -c "import socket; s=socket.socket(); s.bind(('0.0.0.0',80))"
+```
+- With `NET_BIND_SERVICE`, it should succeed:
+```bash
+docker run --rm --user 1000 --cap-add=NET_BIND_SERVICE python:3.11 python -c "import socket; s=socket.socket(); s.bind(('0.0.0.0',80)); print('BOUND')"
+```
+
+---
+
+## 3) Docker Content Trust (DCT)
+
+**WHAT**  
+Cryptographic signing and verification of container images to ensure image integrity and provenance.
+
+**WHY**  
+Prevents running tampered or untrusted images; enforces supply-chain security for image pulls.
+
+**HOW**
+- Enable verification at runtime: `export DOCKER_CONTENT_TRUST=1`.
+- To publish signed images, configure Notary and manage keys (advanced).
+
+**WHEN**
+- Use in production pull pipelines and CI/CD verification.
+- Use when third-party registries are involved or when image provenance is critical.
+
+**EXAMPLE**
 ```bash
 export DOCKER_CONTENT_TRUST=1
-docker pull alpine:latest
+docker pull alpine:latest   # fails if image is unsigned
 ```
 
-If the image isn’t signed, Docker will **refuse to pull** it.
+**QUICK TEST**
+- Attempt to pull an unsigned image with `DOCKER_CONTENT_TRUST=1`; it should fail.
+- Sign an image and verify with DCT enabled.
 
 ---
 
-### 🔹 4. Image Scanning (Trivy, Anchore)
-Scanning images helps identify **vulnerabilities (CVEs)** in packages and libraries.
+## 4) Image scanning (Trivy, Anchore)
 
-#### 🔍 Scan with Trivy
-Install Trivy:
-```bash
-sudo apt install trivy -y
-```
+**WHAT**  
+Scan images for vulnerable packages, misconfigurations, and secret leaks.
 
-Scan an image:
+**WHY**  
+Images can contain outdated packages with known CVEs. Scanning finds issues before deployment.
+
+**HOW**
+- **Trivy**: local, fast scanner — easiest to integrate.
+- **Anchore**: server-based policy engine for CI/CD and audit policies.
+
+**WHEN**
+- Always in CI pipeline; run nightly scans for new CVEs; scan during local development too.
+
+**EXAMPLE (Trivy)**
 ```bash
 trivy image nginx:latest
 ```
 
-#### 🔍 Scan with Anchore CLI
+**EXAMPLE (Anchore CLI)**
 ```bash
 anchore-cli image add nginx:latest
 anchore-cli image vuln nginx:latest all
 ```
 
-🔐 Use these tools in your **CI/CD pipeline** for continuous vulnerability scanning.
+**QUICK TEST**
+- Run `trivy image <image>` and inspect HIGH/CRITICAL findings.
+- Update base image or packages and re-scan.
 
 ---
 
-### 🔹 5. Secrets Management
-Never hardcode passwords, API keys, or tokens inside your Dockerfile.  
-Use Docker secrets or environment variables securely.
+## 5) Secrets management
 
-#### 🧩 Example using Docker Secrets (in Swarm mode):
+**WHAT**  
+Securely inject secrets (passwords, API keys) into containers without baking them into images.
+
+**WHY**  
+Hardcoding secrets in images or source control leads to leaks. Proper secret management prevents accidental exposure.
+
+**HOW**
+- Use Docker Secrets (Swarm) for services.
+- Use secret managers (Vault, AWS Secrets Manager, GCP Secret Manager) for production.
+- For local dev: use `.env` files but ensure `.gitignore` excludes them.
+
+**WHEN**
+- Production: always use a secret manager or Docker Secrets.
+- Development: `.env` is acceptable with care (do not commit).
+
+**EXAMPLE (Docker Swarm)**
 ```bash
-echo "MyDBPassword123" | docker secret create db_password -
-docker service create --name myapp --secret db_password nginx
+docker swarm init
+echo "my_db_password" | docker secret create db_password -
+docker service create --name myapp --secret db_password nginx:alpine
+# inside container: /run/secrets/db_password
 ```
 
-Inside the container:
-```
-/run/secrets/db_password
-```
+**QUICK TEST**
+- Access `/run/secrets/db_password` inside the container.
+- Verify the secret is not present in image layers or `docker history`.
 
 ---
 
-### 🔹 6. Namespaces & Cgroups Basics
-#### 🧭 Namespaces
-Namespaces isolate resources like:
-- **PID** – process IDs  
-- **NET** – networking stack  
-- **MNT** – mounts/filesystems  
-- **UTS** – hostname/domain  
-- **IPC** – interprocess communication  
+## 6) Namespaces & Cgroups basics
 
-➡️ They ensure containers don’t see each other’s processes or files.
+**WHAT**
+- **Namespaces**: isolate kernel resources (PID, NET, MNT, UTS, IPC) per container.
+- **Cgroups**: control groups to limit and monitor resources (CPU, memory, I/O).
 
-#### ⚙️ Cgroups (Control Groups)
-Cgroups limit and monitor **resource usage** (CPU, memory, I/O).
+**WHY**
+- Namespaces provide isolation so containers don’t see each other’s processes or mounts.
+- Cgroups enforce resource limits to prevent noisy-neighbor issues.
 
-Example:
+**HOW**
+- Docker creates namespaces automatically.
+- Use `--memory` and `--cpus` to set cgroup limits.
+
+**WHEN**
+- Always set resource limits for production and multi-tenant hosts.
+- Use namespaces knowledge for troubleshooting and advanced isolation.
+
+**EXAMPLE**
 ```bash
-docker run -d --memory=256m --cpus=0.5 nginx
+docker run -d --memory=256m --cpus=0.5 nginx:latest
 ```
 
-This container:
-- Uses max 256MB RAM  
-- Gets half a CPU core
+**QUICK TEST**
+- Run a memory heavy process and observe OOM kill when exceeding the memory limit.
+- Use `docker stats` to monitor resource usage.
 
 ---
 
-## 🧰 Best Practices Summary
-
-| # | Security Practice | Description |
-|---|------------------|-------------|
-| 1 | Use non-root users | Avoid running containers as root |
-| 2 | Limit capabilities | Drop unnecessary privileges |
-| 3 | Use seccomp profiles | Block dangerous syscalls |
-| 4 | Enable DCT | Pull only trusted signed images |
-| 5 | Scan images | Use Trivy or Anchore regularly |
-| 6 | Manage secrets safely | Use Docker secrets or vaults |
-| 7 | Resource control | Apply namespaces & cgroups |
-
----
-
-## ⚡ Hands-On Challenge
-1. Create a Dockerfile that:
-   - Runs as non-root  
-   - Uses `trivy` to scan itself  
-   - Drops all capabilities except `NET_BIND_SERVICE`  
-
-2. Push your secure image to Docker Hub.
-
-3. Enable Docker Content Trust and verify image signatures.
+## Quick checklist (pre-deploy)
+```
+[ ] Dockerfile uses non-root user
+[ ] Capabilities: --cap-drop=ALL and only necessary --cap-add
+[ ] Seccomp profile applied or default used
+[ ] Image scanned with Trivy (CI + nightly)
+[ ] Secrets are managed with Docker Secrets / Vault
+[ ] Resource limits configured (--memory, --cpus)
+[ ] Docker Content Trust enabled for verified pulls (prod)
+[ ] Automation: all checks in CI/CD
+```
 
 ---
 
-## 📽️ Watch Full Tutorial
-🎥 YouTube: [Docker Security (Day-10) — Tech With Diwana](https://youtube.com/@techwithdiwana)
+## Hands-on scripts included in this package
+- `Dockerfile` — non-root demo image
+- `custom-seccomp.json` — example seccomp profile
+- `test-scripts.sh` — run quick tests (build, capability tests, seccomp test)
 
 ---
+
+## Final notes
+- Principle: **least privilege** — give only what is necessary.  
+- Combine controls: non-root + capabilities + seccomp + secrets + scanning + resource limits.  
+- Automate security checks in CI/CD.
 
 <p align="center">
-  <img src="https://img.shields.io/github/stars/techwithdiwana/docker-zero-to-hero?style=for-the-badge"/>
-  <img src="https://img.shields.io/github/forks/techwithdiwana/docker-zero-to-hero?style=for-the-badge"/>
-  <img src="https://img.shields.io/badge/Subscribe-YouTube-red?style=for-the-badge&logo=youtube"/>
+  <img src="https://img.shields.io/badge/Follow-Tech%20With%20Diwana-red?style=for-the-badge"/> <img src="https://img.shields.io/badge/Day--10--Docker--Security-blue?style=for-the-badge"/>
 </p>
-
----
-
-💬 **Author:** *Diwana Kumar (Tech With Diwana)*  
-📅 **Series:** Docker Zero to Hero | **Day-10**  
-🔗 Follow for daily DevOps learning: [GitHub](https://github.com/techwithdiwana) | [YouTube](https://youtube.com/@techwithdiwana)
